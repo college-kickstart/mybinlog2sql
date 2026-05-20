@@ -2,7 +2,7 @@
   "name": "mybinlog2sql",
   "version": "1.0.0",
   "description": "MySQL binlog to SQL parser",
-  "main": "parse-binlog.js",
+  "main": "parse-log.js",
   "type": "module",
   "scripts": {
     "parse": "node parse-log.js",
