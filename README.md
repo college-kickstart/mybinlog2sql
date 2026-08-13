@@ -16,7 +16,7 @@ This tool reconstructs runnable statements from that output by resolving each `@
 ```sql
 INSERT INTO `categories`
 SET
-  `id`=1
+  `id`=1,
   `category_name`='Electronics';
 ```
 
@@ -70,4 +70,4 @@ pnpm test        # vitest watch mode
 pnpm vitest run  # single pass
 ```
 
-Tests query a live database, so the MySQL server configured in `.env` must be running.
+Tests query a live database, so the MySQL server configured in `.env` must be running. The suite creates and drops its own `categories` table in the configured database.
