@@ -1,8 +1,8 @@
 import mysql from 'mysql2/promise'
 import dotenv from 'dotenv'
 
-// Load env variables
-dotenv.config()
+// quiet: dotenv 17 would otherwise print a tip line to stdout, corrupting piped SQL output
+dotenv.config({ quiet: true })
 
 const DB_HOST = process.env.DB_HOST || 'localhost'
 const DB_PORT = process.env.DB_PORT || 3308
