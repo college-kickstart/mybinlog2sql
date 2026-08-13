@@ -4,3 +4,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # Minor and patch updates land in a single PR that auto-merges.
+      # Major updates arrive as individual PRs for manual review.
+      minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
