@@ -66,8 +66,7 @@ pnpm parse pseudo.sql
 ## Tests
 
 ```sh
-pnpm test        # vitest watch mode
-pnpm vitest run  # single pass
+pnpm test
 ```
 
 Tests query a live database, so the MySQL server configured in `.env` must be running. The suite creates and drops its own `categories` table in the configured database.

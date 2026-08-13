@@ -13,11 +13,10 @@ pnpm is the package manager.
 - `pnpm install` — install dependencies
 - `pnpm parse <log_file>` — parse a binlog dump and print reconstructed SQL to stdout (e.g. `pnpm parse pseudo.sql`)
 - `pnpm dev <log_file>` — same, restarting on file changes (nodemon)
-- `pnpm test` — run vitest in watch mode
-- `pnpm vitest run` — run tests once
-- `pnpm vitest run -t 'should replace placeholders'` — run a single test by name
+- `pnpm test` — run tests with Node's built-in test runner
+- `pnpm test --test-name-pattern='resolves @N placeholders'` — run a single test by name
 
-Tests hit a real database (`getColumnMap` executes `DESCRIBE`), so a reachable MySQL server is required — there are no mocks. The suite self-seeds a `categories` table in the configured database (dropped afterwards) and closes the connection via `db.end()` in `afterAll` so vitest can exit.
+Tests hit a real database (`getColumnMap` executes `DESCRIBE`), so a reachable MySQL server is required — there are no mocks. The suite self-seeds a `categories` table in the configured database (dropped afterwards) and closes the connection via `db.end()` in `after` so Node can exit.
 
 ## Database connection
 
