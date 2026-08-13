@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import assert from 'node:assert/strict'
+import { after, before, describe, it } from 'node:test'
 import { Readable } from 'stream'
 
 import db from '../db.js'
 import { getColumnMap, replacePlaceholders, parseLogFile } from '../lib.js'
 
-beforeAll(async () => {
+before(async () => {
 	// Self-seed the table the tests rely on, matching test.sql
 	await db.execute('DROP TABLE IF EXISTS categories')
 	await db.execute(`
@@ -15,7 +16,7 @@ beforeAll(async () => {
 	`)
 })
 
-afterAll(async () => {
+after(async () => {
 	await db.execute('DROP TABLE IF EXISTS categories')
 	// The open connection keeps the process alive otherwise
 	await db.end()
@@ -23,11 +24,11 @@ afterAll(async () => {
 
 describe('getColumnMap', () => {
 	it('returns the column names of a table', async () => {
-		expect(await getColumnMap('categories')).toEqual(['id', 'category_name'])
+		assert.deepEqual(await getColumnMap('categories'), ['id', 'category_name'])
 	})
 
 	it('rejects invalid table names', async () => {
-		await expect(getColumnMap('categories; DROP TABLE categories')).rejects.toThrow('invalid table name')
+		await assert.rejects(getColumnMap('categories; DROP TABLE categories'), /invalid table name/)
 	})
 })
 
@@ -35,7 +36,7 @@ describe('replacePlaceholders', () => {
 	it('resolves @N placeholders to column names and strips the schema qualifier', async () => {
 		const sql = "INSERT INTO `test`.`categories`\nSET\n  @1=1\n  @2='Electronics';"
 		const expected = "INSERT INTO `categories`\nSET\n  `id`=1,\n  `category_name`='Electronics';"
-		expect(await replacePlaceholders(sql)).toEqual(expected)
+		assert.equal(await replacePlaceholders(sql), expected)
 	})
 
 	it('terminates each row event as its own statement', async () => {
@@ -45,13 +46,13 @@ describe('replacePlaceholders', () => {
 		const expected =
 			"INSERT INTO `categories`\nSET\n  `id`=1,\n  `category_name`='Books';\n" +
 			"INSERT INTO `categories`\nSET\n  `id`=2,\n  `category_name`='Clothing';"
-		expect(await replacePlaceholders(sql)).toEqual(expected)
+		assert.equal(await replacePlaceholders(sql), expected)
 	})
 
 	it('joins DELETE conditions with AND', async () => {
 		const sql = "DELETE FROM `test`.`categories`\nWHERE\n  @1=1\n  @2='Books';"
 		const expected = "DELETE FROM `categories`\nWHERE\n  `id`=1 AND\n  `category_name`='Books';"
-		expect(await replacePlaceholders(sql)).toEqual(expected)
+		assert.equal(await replacePlaceholders(sql), expected)
 	})
 
 	it('puts SET before WHERE for UPDATE', async () => {
@@ -59,12 +60,12 @@ describe('replacePlaceholders', () => {
 		const expected =
 			"UPDATE `categories`\nSET\n  `id`=1,\n  `category_name`='Magazines'\n" +
 			"WHERE\n  `id`=1 AND\n  `category_name`='Books';"
-		expect(await replacePlaceholders(sql)).toEqual(expected)
+		assert.equal(await replacePlaceholders(sql), expected)
 	})
 
 	it('drops events for the t4s_session table', async () => {
 		const sql = 'DELETE FROM `ck`.`t4s_session`\nWHERE\n  @1=123;'
-		expect(await replacePlaceholders(sql)).toEqual('')
+		assert.equal(await replacePlaceholders(sql), '')
 	})
 })
 
@@ -83,7 +84,7 @@ describe('parseLogFile', () => {
 
 		const entries = await parseLogFile(Readable.from([dump]))
 
-		expect(entries).toEqual([
+		assert.deepEqual(entries, [
 			"INSERT INTO `categories`\nSET\n  `id`=1,\n  `category_name`='Electronics';",
 			'CREATE TABLE `foo` (\n  `id` int\n) ENGINE=InnoDB;',
 		])
