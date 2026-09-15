@@ -16,11 +16,16 @@ pnpm is the package manager.
 - `pnpm test` — run tests with Node's built-in test runner
 - `pnpm test --test-name-pattern='resolves @N placeholders'` — run a single test by name
 
-Tests hit a real database (`getColumnMap` executes `DESCRIBE`), so a reachable MySQL server is required — there are no mocks. The suite self-seeds a `categories` table in the configured database (dropped afterwards) and closes the connection via `db.end()` in `after` so Node can exit.
+Tests hit a real database (`getColumnMap` executes `DESCRIBE`), so a reachable MySQL server is required — there are no mocks. The suite self-seeds `categories` (with a primary key) and `visits` (without one) in the configured database, drops both afterwards, and closes the connection via `db.end()` in `after` so Node can exit. One test spawns a child `node` importing `db.js` from an empty temp directory to check the missing-configuration error.
 
 ## Database connection
 
-`db.js` opens a mysql2 connection at import time via top-level await, so importing `lib.js` (directly or through the tests) requires a reachable MySQL server. Configuration comes from `.env` via dotenv, with defaults: `DB_HOST` (localhost), `DB_PORT` (3308), `DB_USER` (root), `DB_PASS` (secret), `DB_NAME` (ck_test). The process hangs at exit unless `db.end()` is called — `parse-log.js` does this after parsing.
+`db.js` opens a mysql2 connection at import time via top-level await, so importing `lib.js` (directly or through the tests) requires a reachable MySQL server. Configuration comes from `.env` via dotenv and there are no code defaults: `db.js` throws listing every missing `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASS`/`DB_NAME` before it tries to connect. `.env` is gitignored; `.env.example` is the committed template. The process hangs at exit unless `db.end()` is called — `parse-log.js` does this after parsing.
+
+Two optional variables shape the output, both space separated lists of exact table names read lazily inside `lib.js` (not at import time, so tests can set them):
+
+- `TABLE_EXCLUDE` — row events for these tables are dropped entirely.
+- `TABLE_WHERE_PK` — the `WHERE` clause for these tables keeps only primary key columns, from `Key === 'PRI'` in the `DESCRIBE` rows. A table with no primary key falls back to the full `WHERE`.
 
 ## Architecture
 
@@ -28,10 +33,10 @@ Pipeline: `parse-log.js` (CLI entry) streams the log file → `parseLogFile()` i
 
 `parseLogFile()` recognizes two block types:
 
-- **Query blocks** — consecutive lines starting with `### ` (row events). When the block ends, `replacePlaceholders()` rewrites it: the schema qualifier is stripped, each `@N` placeholder is replaced with the table's Nth column name, and the pseudo-SQL is normalized into executable statements (comma-separated assignments, `AND`-joined conditions, `SET` before `WHERE` for UPDATE, one terminated statement per row event). Events for the `t4s_session` table are intentionally dropped (empty string returned). The line that ends a query block is re-processed, since it may itself start a schema block.
+- **Query blocks** — consecutive lines starting with `### ` (row events). When the block ends, `replacePlaceholders()` rewrites it: the schema qualifier is stripped, each `@N` placeholder is replaced with the table's Nth column name, and the pseudo-SQL is normalized into executable statements (comma-separated assignments, `AND`-joined conditions, `SET` before `WHERE` for UPDATE, one terminated statement per row event). Tables listed in `TABLE_EXCLUDE` are dropped (empty string returned), tables listed in `TABLE_WHERE_PK` get a primary-key-only `WHERE`, and any `` `col`=NULL `` in a `WHERE` becomes `` `col` IS NULL `` since the former never matches in MySQL. The line that ends a query block is re-processed, since it may itself start a schema block.
 - **Schema blocks** — lines from a `CREATE TABLE`/`ALTER TABLE` up to the `/*!*/;` terminator, passed through verbatim. An `ALTER TABLE` also invalidates that table's entry in the column cache.
 
-Column names come from `DESCRIBE <table>` against the live DB and are cached per-table in the module-level `columnMapCache` in `lib.js` (looked up inside `getColumnMap`).
+`DESCRIBE <table>` rows are fetched from the live DB and cached per-table in the module-level `describeCache` in `lib.js` (inside `describe()`); `getColumnMap` derives column names from them and `getPrimaryKey` the primary key columns.
 
 ## Sample data workflow
 

@@ -4,19 +4,19 @@ import dotenv from 'dotenv'
 // quiet: dotenv 17 would otherwise print a tip line to stdout, corrupting piped SQL output
 dotenv.config({ quiet: true })
 
-const DB_HOST = process.env.DB_HOST || 'localhost'
-const DB_PORT = process.env.DB_PORT || 3308
-const DB_USER = process.env.DB_USER || 'root'
-const DB_PASS = process.env.DB_PASS || 'secret'
-const DB_NAME = process.env.DB_NAME || 'ck_test'
+const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASS', 'DB_NAME']
+const missing = required.filter(name => !process.env[name])
+if (missing.length) {
+	throw new Error(`missing configuration: ${missing.join(', ')} - copy .env.example to .env and fill it in`)
+}
 
 // Connect to MySQL
 const db = await mysql.createConnection({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASS,
-	database: DB_NAME,
+	host: process.env.DB_HOST,
+	port: process.env.DB_PORT,
+	user: process.env.DB_USER,
+	password: process.env.DB_PASS,
+	database: process.env.DB_NAME,
 })
 
 export default db

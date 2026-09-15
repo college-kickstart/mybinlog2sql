@@ -1,18 +1,31 @@
 import readline from 'readline'
 import db from './db.js'
 
-const columnMapCache = {}
+const describeCache = {}
 
-export async function getColumnMap(table) {
+async function describe(table) {
 	if (!/^\w+$/.test(table)) throw new Error(`invalid table name: ${table}`)
-	if (columnMapCache[table]) return columnMapCache[table]
-	const [items] = await db.execute(`DESCRIBE ${table}`)
-	const cols = items.map(row => row.Field)
-	columnMapCache[table] = cols
-	return cols
+	if (describeCache[table]) return describeCache[table]
+	const [rows] = await db.execute(`DESCRIBE ${table}`)
+	describeCache[table] = rows
+	return rows
 }
 
-function toExecutableSql(block) {
+export async function getColumnMap(table) {
+	return (await describe(table)).map(row => row.Field)
+}
+
+export async function getPrimaryKey(table) {
+	return (await describe(table)).filter(row => row.Key === 'PRI').map(row => row.Field)
+}
+
+// Read lazily, not at import time: ESM hoists imports, so a caller cannot set
+// these before this module is evaluated.
+function envTables(name) {
+	return new Set((process.env[name] || '').split(/\s+/).filter(Boolean))
+}
+
+function toExecutableSql(block, pkCols = []) {
 	const lines = block.replace(/;\s*$/, '').split('\n')
 	const statements = []
 	let current = null
@@ -28,10 +41,18 @@ function toExecutableSql(block) {
 			current[section].push(line.trim())
 		}
 	}
+	// `col`=NULL never matches in MySQL, the before-image needs `col` IS NULL
+	const nullSafe = line => line.replace(/^(`[^`]+`)=NULL$/, '$1 IS NULL')
+	const narrow = lines => {
+		if (!pkCols.length) return lines
+		const kept = lines.filter(line => pkCols.includes(line.match(/^`([^`]+)`=/)?.[1]))
+		return kept.length ? kept : lines
+	}
 	const render = ({ header, SET, WHERE }) => {
 		const parts = [header]
 		if (SET.length) parts.push('SET\n  ' + SET.join(',\n  '))
-		if (WHERE.length) parts.push('WHERE\n  ' + WHERE.join(' AND\n  '))
+		const where = narrow(WHERE).map(nullSafe)
+		if (where.length) parts.push('WHERE\n  ' + where.join(' AND\n  '))
 		return parts.join('\n')
 	}
 	return statements.map(render).join(';\n') + ';'
@@ -42,14 +63,15 @@ export async function replacePlaceholders(sql) {
 	const match = sql.match(query)
 	if (!match) return sql
 	const [, action, schema, table] = match
-	if (table === 't4s_session') return ''
+	if (envTables('TABLE_EXCLUDE').has(table)) return ''
 	sql = sql.replaceAll(schema, '')
 	const cols = await getColumnMap(table)
 	const placeholders = /(?<=^  )@(\d+)(?==)/gm
 	sql = sql.replaceAll(placeholders, (m, i) => {
 		return '`' + cols[i - 1] + '`'
 	})
-	return toExecutableSql(sql)
+	const pkCols = envTables('TABLE_WHERE_PK').has(table) ? await getPrimaryKey(table) : []
+	return toExecutableSql(sql, pkCols)
 }
 
 export async function parseLogFile(stream) {
@@ -87,7 +109,7 @@ export async function parseLogFile(stream) {
 				break
 			case line.startsWith('ALTER TABLE'):
 				const [_, table] = line.match(/ALTER TABLE `?(\w+)`?/i)
-				delete columnMapCache[table]
+				delete describeCache[table]
 			case line.startsWith('CREATE TABLE'):
 				isSchema = true
 			case inSchemaBlock:

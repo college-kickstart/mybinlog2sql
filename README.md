@@ -32,15 +32,25 @@ SET
 pnpm install
 ```
 
-Configure the database connection in a `.env` file. Defaults:
+Copy `.env.example` to `.env` and fill it in - there are no built-in defaults, and the tool refuses to start while any `DB_*` variable is missing.
 
-| Variable  | Default     |
-| --------- | ----------- |
-| `DB_HOST` | `localhost` |
-| `DB_PORT` | `3308`      |
-| `DB_USER` | `root`      |
-| `DB_PASS` | `secret`    |
-| `DB_NAME` | `ck_test`   |
+```sh
+cp .env.example .env
+```
+
+| Variable         | Purpose                                                                    |
+| ---------------- | -------------------------------------------------------------------------- |
+| `DB_HOST`        | MySQL host                                                                  |
+| `DB_PORT`        | MySQL port                                                                  |
+| `DB_USER`        | MySQL user                                                                  |
+| `DB_PASS`        | MySQL password                                                              |
+| `DB_NAME`        | Database to resolve column names against                                    |
+| `TABLE_EXCLUDE`  | Space separated table names whose row events are dropped from the output    |
+| `TABLE_WHERE_PK` | Space separated table names whose `WHERE` is narrowed to primary key columns |
+
+`TABLE_EXCLUDE` is for noise you never want to replay, such as a session table. `TABLE_WHERE_PK` keeps `UPDATE` and `DELETE` targeted by primary key instead of matching the full before-image row; a table with no primary key falls back to the full `WHERE`. Both match exact table names, no wildcards.
+
+`NULL` values in a `WHERE` clause are always emitted as `` `col` IS NULL ``, not `` `col`=NULL `` - the latter is what the binlog dump implies but it never matches a row in MySQL.
 
 ## Usage
 
@@ -69,4 +79,4 @@ pnpm parse pseudo.sql
 pnpm test
 ```
 
-Tests query a live database, so the MySQL server configured in `.env` must be running. The suite creates and drops its own `categories` table in the configured database.
+Tests query a live database, so the MySQL server configured in `.env` must be running. The suite creates and drops its own `categories` and `visits` tables in the configured database.
